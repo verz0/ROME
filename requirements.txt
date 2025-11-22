@@ -1,0 +1,12 @@
+numpy
+pandas
+tqdm
+opencv-python
+moviepy==1.0.3
+librosa
+ffmpeg-python
+torch
+transformers
+sentence-transformers
+scikit-learn
+streamlit

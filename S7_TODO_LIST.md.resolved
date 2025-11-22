@@ -1,0 +1,129 @@
+# RoME Phase I (S7) - Detailed Todo List
+
+This document outlines the step-by-step tasks required to build the S7 scope of the RoME project: **Role-aware Multimodal Meeting Summarizer**.
+
+## 1. Project Initialization & Environment Setup
+- [ ] **Repository Setup**
+    - [ ] Initialize Git repository.
+    - [ ] Create `.gitignore` (python, video files, datasets).
+    - [ ] Create directory structure:
+        - `data/` (raw_meetings, processed_segments)
+        - `src/` (pipeline, models, utils, ui)
+        - `notebooks/` (experiments)
+- [ ] **Environment Configuration**
+    - [ ] Create `requirements.txt` or `environment.yml`.
+    - [ ] Select and install core dependencies:
+        - **General**: `numpy`, `pandas`, `tqdm`
+        - **Audio/Video**: `opencv-python`, `moviepy`, `librosa`, `ffmpeg-python`
+        - **ML/DL**: `torch`, `transformers` (HuggingFace), `scikit-learn`
+        - **UI**: `streamlit` (recommended for rapid prototyping) or `flask`/`react`.
+
+## 1.1 Data Sources (Software & General Meetings)
+- [ ] **Download Datasets**
+    - [ ] **AMI Meeting Corpus** (Multimodal, Technical/Design meetings): [Download Link](https://groups.inf.ed.ac.uk/ami/download/)
+    - [ ] **ICSI Meeting Corpus** (Technical discussions): [Info Link](https://groups.inf.ed.ac.uk/ami/icsi/)
+    - [ ] **QMSum** (Query-based summarization, good for role-based intent): [GitHub Link](https://github.com/Yale-LILY/QMSum)
+    - [ ] **ELITR Minuting Corpus** (Technical project meetings): [GitHub Link](https://github.com/TUM-NLP/elitr-minuting-corpus)
+
+## 2. Data Ingestion & Preprocessing Pipeline
+- [ ] **Input Handling**
+    - [ ] Create `MeetingLoader` class to accept:
+        - Video file (.mp4)
+        - Audio file (.wav/mp3) - *extract from video if missing*
+        - Transcript file (.vtt/.srt/.json)
+        - Metadata (Meeting ID, Date, Attendees).
+- [ ] **Synchronization**
+    - [ ] Implement timestamp alignment utility to map transcript lines to audio/video timestamps.
+- [ ] **Segmentation**
+    - [ ] Implement `SegmentGenerator`:
+        - Logic to slice meeting into fixed-length windows (e.g., 30s or 60s) or sentence-based windows.
+        - Output: List of segments with `start_time`, `end_time`, `text`, `audio_path`, `video_frame_indices`.
+
+## 3. Feature Extraction (Multimodal)
+- [ ] **Text Features (BERT)**
+    - [ ] Load pre-trained BERT model (e.g., `bert-base-uncased` or `sentence-transformers`).
+    - [ ] Implement function to generate embeddings for each segment's text.
+- [ ] **Audio Features**
+    - [ ] Implement audio feature extractor:
+        - MFCCs (Mel-frequency cepstral coefficients) using `librosa`.
+        - *Optional*: Pre-trained audio embedding (e.g., VGGish) if MFCC is insufficient.
+- [ ] **Video Features**
+    - [ ] Implement frame sampler (e.g., 1 frame per second).
+    - [ ] Load pre-trained CNN (e.g., ResNet50).
+    - [ ] Implement function to extract visual features from sampled frames and pool them (avg/max) for the segment.
+
+## 4. Role Management & Embedding
+- [ ] **Role Definitions (CS Context)**
+    - [ ] Define specific roles and their keywords/interests:
+        - **Project Manager**: Deadlines, schedules, blockers, JIRA, budget, "when", "deliverable".
+        - **Backend Developer**: API, database, architecture, latency, server, SQL, "endpoint".
+        - **Frontend/UI Designer**: UX, layout, CSS, components, user flow, "button", "screen".
+        - **QA Engineer**: Bugs, test cases, reproduction, release, "fail", "validation".
+- [ ] **Role Embeddings**
+    - [ ] Implement strategy to represent roles as vectors:
+        - *Option A (Simple)*: Keyword-based embeddings (embed description of role).
+        - *Option B (Learned)*: Trainable embedding layer if training data exists.
+    - [ ] Implement `SpeakerToRoleMapper` to assign a role to each speaker in the transcript.
+
+## 5. Model Training & Evaluation (The Core AI)
+- [ ] **Dataset Preparation for Training**
+    - [ ] **Multimodal Source (AMI/ICSI)**:
+        - Use **AMI Meeting Corpus** as the primary source for Video (Head/Screenshare) and Audio.
+        - Extract "Speaker Roles" provided in AMI metadata (e.g., Industrial Designer, Project Manager) to map to our CS roles.
+    - [ ] **Role Logic Source (QMSum)**:
+        - Use **QMSum** to learn the "Query -> Summary" mapping.
+        - *Strategy*: Train a text-only "Intent Model" on QMSum to identify *what* is important for a specific query (Role), then transfer this knowledge to the Multimodal model.
+    - [ ] **Data Splitting**: Create Train/Val/Test splits (80/10/10) ensuring no meeting overlap.
+    - [ ] **Data Loader**: Implement PyTorch `DataLoader` for batches of `(multimodal_features, role_embedding, importance_label)`.
+- [ ] **Model Architecture (Trainable)**
+    - [ ] Design `RoME_Scorer` class (PyTorch Module).
+    - [ ] **Fusion Layer**: Implement Attention mechanism (e.g., Cross-Attention) to weigh Text/Audio/Video features based on Role Embedding.
+    - [ ] **Scoring Head**: MLP -> Sigmoid to output probability of a segment being a highlight for the role.
+- [ ] **Training Loop**
+    - [ ] Define Loss Function: `BCELoss` (Binary Cross Entropy) or `FocalLoss` (if classes are imbalanced).
+    - [ ] Implement training script with `AdamW` optimizer and learning rate scheduler.
+    - [ ] Implement validation loop to track Accuracy/F1-score per role.
+    - [ ] Implement "Early Stopping" to save best model weights.
+- [ ] **Inference Logic**
+    - [ ] Implement `predict_importance(segment, target_role)` using the trained weights.
+
+## 6. Highlight Selection & Generation
+- [ ] **Selection Logic**
+    - [ ] Implement `HighlightSelector`:
+        - Filter segments by score threshold.
+        - Select top N minutes of content.
+        - Apply smoothing (merge adjacent high-score segments).
+- [ ] **Output Generation**
+    - [ ] Implement `VideoClipper`: Use `moviepy` to cut and concatenate video segments.
+    - [ ] Implement `SummaryFormatter`: Generate a text summary document/timeline.
+
+## 7. User Interface (Prototype)
+- [ ] **Web App Setup (Streamlit)**
+    - [ ] Create `app.py`.
+- [ ] **Upload Interface**
+    - [ ] File uploader for Video/Transcript.
+    - [ ] Input field for "Select Your Role".
+- [ ] **Processing Feedback**
+    - [ ] Progress bars for "Ingesting...", "Analyzing...", "Generating Summary...".
+- [ ] **Results Display**
+    - [ ] Video Player for the generated highlight reel.
+    - [ ] Scrollable Transcript with highlighted sections.
+    - [ ] Download button for the summary video/report.
+
+## 8. Testing & Validation
+- [ ] **Test Data Strategy**
+    - [ ] **Primary Test Set**: Use the held-out "Test Split" from the AMI Corpus (unseen meetings).
+    - [ ] **Custom Test**: Allow user to upload a sample 5-minute Zoom/Teams recording to verify "real-world" performance.
+- [ ] **Unit Testing**
+    - [ ] Test data loaders.
+    - [ ] Test segmentation logic (boundary checks).
+- [ ] **Integration Testing**
+    - [ ] Run full pipeline on a dummy 5-minute meeting.
+- [ ] **User Validation**
+    - [ ] Verify that changing the "Role" actually changes the selected highlights (Sanity Check).
+
+## 9. Final Deliverables (S7)
+- [ ] **Working Prototype**: Python-based pipeline (or Streamlit App) that takes a video + transcript and outputs a role-based summary.
+- [ ] **Codebase**: Clean, documented code in `src/` with a `README.md` on how to run it.
+- [ ] **Demo Video**: A screen recording showing the system processing a meeting and changing the output based on the selected role.
+- [ ] **Project Report**: A document detailing the architecture, data sources (AMI/QMSum), and preliminary results.
